@@ -47,8 +47,8 @@ import binascii
 import intelhex
 
 # Nordic libraries
-from nordicsemi.dfu.nrfhex import nRFArch
-from nordicsemi.dfu.package import Package
+from .nrfhex import nRFArch
+from .package import Package
 from pc_ble_driver_py.exceptions import NordicSemiException
 
 logger = logging.getLogger(__name__)
