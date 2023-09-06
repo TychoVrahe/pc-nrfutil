@@ -211,10 +211,7 @@ class BLDFUSettings:
                 self.app_boot_validation_bytes = struct.pack('<I', self.app_crc)
             elif app_boot_validation_type == 'VALIDATE_GENERATED_SHA256':
                 self.app_boot_validation_type = 2 & 0xffffffff
-                # Package.calculate_sha256_hash gives a reversed
-                # digest. It need to be reversed back to a normal
-                # sha256 digest.
-                self.app_boot_validation_bytes = Package.calculate_sha256_hash(self.app_bin)[::-1]
+                self.app_boot_validation_bytes = Package.calculate_hash(self.app_bin)[::-1]
             elif app_boot_validation_type == 'VALIDATE_ECDSA_P256_SHA256':
                 self.app_boot_validation_type = 3 & 0xffffffff
                 self.app_boot_validation_bytes = Package.sign_firmware(signer, self.app_bin)
@@ -251,10 +248,7 @@ class BLDFUSettings:
                 self.sd_boot_validation_bytes = struct.pack('<I', sd_crc)
             elif sd_boot_validation_type == 'VALIDATE_GENERATED_SHA256':
                 self.sd_boot_validation_type = 2 & 0xffffffff
-                # Package.calculate_sha256_hash gives a reversed
-                # digest. It need to be reversed back to a normal
-                # sha256 digest.
-                self.sd_boot_validation_bytes = Package.calculate_sha256_hash(self.sd_bin)[::-1]
+                self.sd_boot_validation_bytes = Package.calculate_hash(self.sd_bin)[::-1]
             elif sd_boot_validation_type == 'VALIDATE_ECDSA_P256_SHA256':
                 self.sd_boot_validation_type = 3 & 0xffffffff
                 self.sd_boot_validation_bytes = Package.sign_firmware(signer, self.sd_bin)

@@ -72,17 +72,10 @@ def _make_dev_keys(*key_bytes: bytes):
 def sign_with_privkeys(digest: bytes, privkeys) -> bytes:
     """Locally produce a CoSi signature."""
     pubkeys = [cosi.pubkey_from_privkey(sk) for sk in privkeys]
-    print("privkeys: ", privkeys)
-    print("pubkeys: ")
-    for p in pubkeys:
-        print(p.hex())
     nonces = [cosi.get_nonce(sk, digest, i) for i, sk in enumerate(privkeys)]
 
     global_pk = cosi.combine_keys(pubkeys)
     global_R = cosi.combine_keys(R for r, R in nonces)
-
-
-    print("signed digest: ", digest.hex())
 
     sigs = [
         cosi.sign_with_privkey(digest, sk, global_pk, r, global_R)
@@ -91,9 +84,6 @@ def sign_with_privkeys(digest: bytes, privkeys) -> bytes:
 
     signature = cosi.combine_sig(global_R, sigs)
     try:
-        print(signature.hex())
-        print(global_pk.hex())
-        print(digest.hex())
         cosi.verify_combined(signature, digest, global_pk)
     except Exception as e:
         raise click.ClickException("Failed to produce valid signature.") from e
@@ -128,17 +118,10 @@ class Signing:
         return default_sk.to_string() == self.sk.to_string()
 
     def sign(self, init_packet_data):
-        """
-        Create signature for init package using P-256 curve and SHA-256 as hashing algorithm
-        Returns R and S keys combined in a 64 byte array
-        """
-        # Add assertion of init_packet
-        if self.sk is None:
-            raise AssertionError("Can't save key. No key created/loaded")
 
         # Sign the init-packet
         DEV_KEYS = _make_dev_keys(b"\x41", b"\x42")
-        digest = hashlib.sha256(init_packet_data).digest()
+        digest = hashlib.blake2s(init_packet_data).digest()
         trezor_signature = sign_with_privkeys(digest, DEV_KEYS)
         return trezor_signature
         # signature = self.sk.sign(init_packet_data, hashfunc=hashlib.sha256, sigencode=sigencode_string)

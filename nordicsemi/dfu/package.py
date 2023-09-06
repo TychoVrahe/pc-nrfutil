@@ -417,7 +417,7 @@ DFU Package: <{0}>:
 
             # Calculate the hash for the .bin file located in the work directory
             bin_file_path = os.path.join(self.work_dir, firmware_data[FirmwareKeys.BIN_FILENAME])
-            firmware_hash = Package.calculate_sha256_hash(bin_file_path)
+            firmware_hash = Package.calculate_hash(bin_file_path)
             bin_length = int(Package.calculate_file_size(bin_file_path))
 
             sd_size = 0
@@ -509,10 +509,10 @@ DFU Package: <{0}>:
         return b
 
     @staticmethod
-    def calculate_sha256_hash(firmware_filename):
+    def calculate_hash(firmware_filename):
         read_buffer = 4096
 
-        digest = hashlib.sha256()
+        digest = hashlib.blake2s()
 
         with open(firmware_filename, 'rb') as firmware_file:
             while True:
@@ -523,9 +523,7 @@ DFU Package: <{0}>:
                 else:
                     break
 
-        # return hash in little endian
-        sha256 = digest.digest()
-        return sha256[31::-1]
+        return digest.digest()
 
     @staticmethod
     def calculate_crc(crc, firmware_filename):
