@@ -62,6 +62,46 @@ AwEHoUQDQgAEaHYrUu/oFKIXN457GH+8IOuv6OIPBRLqoHjaEKM0wIzJZ0lhfO/A
 53hKGjKEjYT3VNTQ3Zq1YB3o5QSQMP/LRg==
 -----END EC PRIVATE KEY-----"""
 
+
+from trezorlib import cosi
+
+def _make_dev_keys(*key_bytes: bytes):
+    return [k * 32 for k in key_bytes]
+
+
+def sign_with_privkeys(digest: bytes, privkeys) -> bytes:
+    """Locally produce a CoSi signature."""
+    pubkeys = [cosi.pubkey_from_privkey(sk) for sk in privkeys]
+    print("privkeys: ", privkeys)
+    print("pubkeys: ")
+    for p in pubkeys:
+        print(p.hex())
+    nonces = [cosi.get_nonce(sk, digest, i) for i, sk in enumerate(privkeys)]
+
+    global_pk = cosi.combine_keys(pubkeys)
+    global_R = cosi.combine_keys(R for r, R in nonces)
+
+
+    print("signed digest: ", digest.hex())
+
+    sigs = [
+        cosi.sign_with_privkey(digest, sk, global_pk, r, global_R)
+        for sk, (r, R) in zip(privkeys, nonces)
+    ]
+
+    signature = cosi.combine_sig(global_R, sigs)
+    try:
+        print(signature.hex())
+        print(global_pk.hex())
+        print(digest.hex())
+        cosi.verify_combined(signature, digest, global_pk)
+    except Exception as e:
+        raise click.ClickException("Failed to produce valid signature.") from e
+
+    return signature
+
+
+
 class Signing:
     """
     Class for singing of hex-files
@@ -97,8 +137,12 @@ class Signing:
             raise AssertionError("Can't save key. No key created/loaded")
 
         # Sign the init-packet
-        signature = self.sk.sign(init_packet_data, hashfunc=hashlib.sha256, sigencode=sigencode_string)
-        return signature[31::-1] + signature[63:31:-1]
+        DEV_KEYS = _make_dev_keys(b"\x41", b"\x42")
+        digest = hashlib.sha256(init_packet_data).digest()
+        trezor_signature = sign_with_privkeys(digest, DEV_KEYS)
+        return trezor_signature
+        # signature = self.sk.sign(init_packet_data, hashfunc=hashlib.sha256, sigencode=sigencode_string)
+        # return trezor_signature[31::-1] + signature[63:31:-1]
 
     def verify(self, init_packet, signature):
         """
