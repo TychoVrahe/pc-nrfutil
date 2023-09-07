@@ -50,7 +50,7 @@ import hashlib
 
 # Nordic libraries
 from .nrfhex import nRFHex
-from .init_packet_pb import InitPacketPB, DFUType, CommandTypes, ValidationTypes, SigningTypes, HashTypes
+from .init_packet_pb import InitPacketPB, DFUType, CommandTypes, ValidationTypes, HashTypes
 from .manifest import ManifestGenerator, Manifest
 from .model import HexType, FirmwareKeys
 from .crc16 import calc_crc16
@@ -434,15 +434,21 @@ DFU Package: <{0}>:
                 sd_size = firmware_data[FirmwareKeys.SD_SIZE]
 
             boot_validation_type_array = firmware_data[FirmwareKeys.BOOT_VALIDATION_TYPE]
+            boot_validation_type_sigmasks = []
             boot_validation_bytes_array = []
             for x in boot_validation_type_array:
                 if x  == ValidationTypes.VALIDATE_ECDSA_P256_SHA256:
                     if key == HexType.SD_BL:
-                        boot_validation_bytes_array.append(Package.sign_firmware(self.signer, sd_bin_path))
+                        signature, sigmask = Package.sign_firmware(self.signer, sd_bin_path)
+                        boot_validation_bytes_array.append(signature)
+                        boot_validation_type_sigmasks.append(sigmask)
                     else:
-                        boot_validation_bytes_array.append(Package.sign_firmware(self.signer, bin_file_path))
+                        signature, sigmask = Package.sign_firmware(self.signer, bin_file_path)
+                        boot_validation_bytes_array.append(signature)
+                        boot_validation_type_sigmasks.append(sigmask)
                 else:
                     boot_validation_bytes_array.append(b'')
+                    boot_validation_type_sigmasks.append(0)
 
 
             init_packet = InitPacketPB(
@@ -451,6 +457,7 @@ DFU Package: <{0}>:
                             hash_type=HashTypes.SHA256,
                             boot_validation_type=boot_validation_type_array,
                             boot_validation_bytes=boot_validation_bytes_array,
+                            boot_validation_sigmasks=boot_validation_type_sigmasks,
                             dfu_type=HexTypeToInitPacketFwTypemap[key],
                             is_debug=firmware_data[FirmwareKeys.INIT_PACKET_DATA][PacketField.DEBUG_MODE],
                             fw_version=firmware_data[FirmwareKeys.INIT_PACKET_DATA][PacketField.FW_VERSION],
@@ -461,8 +468,8 @@ DFU Package: <{0}>:
                             sd_req=firmware_data[FirmwareKeys.INIT_PACKET_DATA][PacketField.REQUIRED_SOFTDEVICES_ARRAY])
 
             if (self.signer is not None):
-                signature = self.signer.sign(init_packet.get_init_command_bytes())
-                init_packet.set_signature(signature, SigningTypes.ECDSA_P256_SHA256)
+                signature, sigmask = self.signer.sign(init_packet.get_init_command_bytes())
+                init_packet.set_signature(signature, sigmask)
 
             # Store the .dat file in the work directory
             init_packet_filename = firmware_data[FirmwareKeys.BIN_FILENAME].replace(".bin", ".dat")

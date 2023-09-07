@@ -121,9 +121,10 @@ class Signing:
 
         # Sign the init-packet
         DEV_KEYS = _make_dev_keys(b"\x41", b"\x42")
+        sigmask = 3
         digest = hashlib.blake2s(init_packet_data).digest()
         trezor_signature = sign_with_privkeys(digest, DEV_KEYS)
-        return trezor_signature
+        return trezor_signature, sigmask
         # signature = self.sk.sign(init_packet_data, hashfunc=hashlib.sha256, sigencode=sigencode_string)
         # return trezor_signature[31::-1] + signature[63:31:-1]
 

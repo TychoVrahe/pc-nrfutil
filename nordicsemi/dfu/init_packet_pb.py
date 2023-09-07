@@ -38,10 +38,6 @@
 from . import dfu_cc_pb2 as pb
 from enum import Enum
 
-class SigningTypes(Enum):
-    ECDSA_P256_SHA256 = pb.ECDSA_P256_SHA256
-    ED25519 = pb.ED25519
-
 class CommandTypes(Enum):
     INIT = pb.INIT
 
@@ -73,6 +69,7 @@ class InitPacketPB:
                  hash_type = None,
                  boot_validation_type = [],
                  boot_validation_bytes = [],
+                 boot_validation_sigmasks = [],
                  dfu_type = None,
                  is_debug=False,
                  fw_version=0xffffffff,
@@ -101,7 +98,7 @@ class InitPacketPB:
 
             boot_validation = []
             for i, x in enumerate(boot_validation_type):
-                boot_validation.append(pb.BootValidation(type=x.value, bytes=boot_validation_bytes[i]))
+                boot_validation.append(pb.BootValidation(sigmask=boot_validation_sigmasks[i], bytes=boot_validation_bytes[i], ))
 
             # By default, set the packet's command to an unsigned command
             # If a signature is set (via set_signature), this will get overwritten
@@ -155,10 +152,10 @@ class InitPacketPB:
     def get_init_command_bytes(self):
         return self.init_command.SerializeToString()
 
-    def set_signature(self, signature, signature_type):
+    def set_signature(self, signature, sigmask):
         new_packet = pb.Packet()
         new_packet.signed_command.signature = signature
-        new_packet.signed_command.signature_type = signature_type.value
+        new_packet.signed_command.sigmask = sigmask
         new_packet.signed_command.command.CopyFrom(self.packet.command)
 
         self.packet = new_packet
