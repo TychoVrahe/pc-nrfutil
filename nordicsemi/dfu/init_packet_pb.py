@@ -67,7 +67,6 @@ class InitPacketPB:
                  from_bytes = None,
                  hash_bytes = None,
                  hash_type = None,
-                 boot_validation_type = [],
                  boot_validation_bytes = [],
                  boot_validation_sigmasks = [],
                  dfu_type = None,
@@ -97,7 +96,7 @@ class InitPacketPB:
             self.packet = pb.Packet()
 
             boot_validation = []
-            for i, x in enumerate(boot_validation_type):
+            for i, x in enumerate(boot_validation_bytes):
                 boot_validation.append(pb.BootValidation(sigmask=boot_validation_sigmasks[i], bytes=boot_validation_bytes[i], ))
 
             # By default, set the packet's command to an unsigned command

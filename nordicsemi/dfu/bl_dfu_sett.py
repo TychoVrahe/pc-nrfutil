@@ -172,22 +172,16 @@ class BLDFUSettings:
 
         return binascii.crc32(bytearray(list)) & 0xFFFFFFFF
 
-    def generate(self, arch, app_file, app_ver, bl_ver, bl_sett_ver, custom_bl_sett_addr, no_backup,
-                 backup_address, app_boot_validation_type, sd_boot_validation_type, sd_file, signer):
+    def generate(self, arch, app_file, app_ver, bl_ver, custom_bl_sett_addr, no_backup,
+                 backup_address, sd_file, signer):
 
         self.set_arch(arch)
 
         if custom_bl_sett_addr is not None:
             self.bl_sett_addr = custom_bl_sett_addr
 
-        if bl_sett_ver == 1:
-            self.setts = BLDFUSettingsStructV1(self.bl_sett_addr)
-        elif bl_sett_ver == 2:
-            self.setts = BLDFUSettingsStructV2(self.bl_sett_addr)
-        else:
-            raise NordicSemiException("Unknown bootloader settings version")
-
-        self.bl_sett_ver = bl_sett_ver & 0xffffffff
+        self.setts = BLDFUSettingsStructV2(self.bl_sett_addr)
+        self.bl_sett_ver = 2 & 0xffffffff
         self.bl_ver = bl_ver & 0xffffffff
 
         if app_ver is not None:
@@ -206,28 +200,15 @@ class BLDFUSettings:
             self.bank0_bank_code = 0x1 & 0xffffffff
 
             # Calculate Boot validation fields for app
-            if app_boot_validation_type == 'VALIDATE_GENERATED_CRC':
-                self.app_boot_validation_type = 1 & 0xffffffff
-                self.app_boot_validation_sigmask = 0
-                self.app_boot_validation_bytes = struct.pack('<I', self.app_crc)
-            elif app_boot_validation_type == 'VALIDATE_GENERATED_SHA256':
-                self.app_boot_validation_type = 2 & 0xffffffff
-                self.app_boot_validation_sigmask = 0
-                self.app_boot_validation_bytes = Package.calculate_hash(self.app_bin)[::-1]
-            elif app_boot_validation_type == 'VALIDATE_ECDSA_P256_SHA256':
-                signature, sigmask = Package.sign_firmware(signer, self.app_bin)
-                self.app_boot_validation_type = 3 & 0xffffffff
-                self.app_boot_validation_sigmask = sigmask
-                self.app_boot_validation_bytes = signature
-            else:  # This also covers 'NO_VALIDATION' case
-                self.app_boot_validation_type = 0 & 0xffffffff
-                self.app_boot_validation_sigmask = 0
-                self.app_boot_validation_bytes = bytes(0)
+
+            signature, sigmask = Package.sign_firmware(signer, self.app_bin)
+            self.app_boot_validation_sigmask = sigmask
+            self.app_boot_validation_bytes = signature
+
         else:
             self.app_sz = 0x0 & 0xffffffff
             self.app_crc = 0x0 & 0xffffffff
             self.bank0_bank_code = 0x0 & 0xffffffff
-            self.app_boot_validation_type = 0x0 & 0xffffffff
             self.app_boot_validation_bytes = bytes(0)
             self.app_boot_validation_sigmask = 0
 
@@ -247,28 +228,11 @@ class BLDFUSettings:
 
             self.sd_sz = int(Package.calculate_file_size(self.sd_bin)) & 0xffffffff
 
-            # Calculate Boot validation fields for SD
-            if sd_boot_validation_type == 'VALIDATE_GENERATED_CRC':
-                self.sd_boot_validation_type = 1 & 0xffffffff
-                sd_crc = int(Package.calculate_crc(32, self.sd_bin)) & 0xffffffff
-                self.sd_boot_validation_bytes = struct.pack('<I', sd_crc)
-                self.sd_boot_validation_sigmask = 0
-            elif sd_boot_validation_type == 'VALIDATE_GENERATED_SHA256':
-                self.sd_boot_validation_type = 2 & 0xffffffff
-                self.sd_boot_validation_sigmask = 0
-                self.sd_boot_validation_bytes = Package.calculate_hash(self.sd_bin)[::-1]
-            elif sd_boot_validation_type == 'VALIDATE_ECDSA_P256_SHA256':
-                signature, sigmask = Package.sign_firmware(signer, self.sd_bin)
-                self.sd_boot_validation_type = 3 & 0xffffffff
-                self.sd_boot_validation_sigmask = sigmask
-                self.sd_boot_validation_bytes = signature
-            else:  # This also covers 'NO_VALIDATION_CASE'
-                self.sd_boot_validation_type = 0 & 0xffffffff
-                self.sd_boot_validation_sigmask = 0
-                self.sd_boot_validation_bytes = bytes(0)
+            signature, sigmask = Package.sign_firmware(signer, self.sd_bin)
+            self.sd_boot_validation_sigmask = sigmask
+            self.sd_boot_validation_bytes = signature
         else:
             self.sd_sz = 0x0 & 0xffffffff
-            self.sd_boot_validation_type = 0 & 0xffffffff
             self.sd_boot_validation_bytes = bytes(0)
             self.sd_boot_validation_sigmask = 0
 
@@ -296,15 +260,14 @@ class BLDFUSettings:
         self._add_value_tohex(self.setts.sd_sz, self.sd_sz)
 
         self.boot_validation_crc = 0x0 & 0xffffffff
-        if self.bl_sett_ver == 2:
-            self._add_value_tohex(self.setts.sd_validation_sigmask, self.sd_boot_validation_sigmask)
-            self.ihex.puts(self.setts.sd_validation_bytes, self.sd_boot_validation_bytes)
+        self._add_value_tohex(self.setts.sd_validation_sigmask, self.sd_boot_validation_sigmask)
+        self.ihex.puts(self.setts.sd_validation_bytes, self.sd_boot_validation_bytes)
 
-            self._add_value_tohex(self.setts.app_validation_sigmask, self.app_boot_validation_sigmask)
-            self.ihex.puts(self.setts.app_validation_bytes, self.app_boot_validation_bytes)
+        self._add_value_tohex(self.setts.app_validation_sigmask, self.app_boot_validation_sigmask)
+        self.ihex.puts(self.setts.app_validation_bytes, self.app_boot_validation_bytes)
 
-            self.boot_validation_crc = 0
-            self._add_value_tohex(self.setts.boot_validataion_crc, self.boot_validation_crc)
+        self.boot_validation_crc = 0
+        self._add_value_tohex(self.setts.boot_validataion_crc, self.boot_validation_crc)
 
         self.crc = self._calculate_crc32_from_hex(self.ihex,
                                                   start_addr=self.bl_sett_addr+4,
@@ -356,16 +319,12 @@ class BLDFUSettings:
         if self.bl_sett_ver == 2:
             self.sd_sz                    = self._get_value_fromhex(self.setts.sd_sz)
             self.boot_validation_crc      = self._get_value_fromhex(self.setts.boot_validataion_crc)
-            self.sd_boot_validation_type  = self._get_value_fromhex(self.setts.sd_validation_type, size=1, format='<b')
             self.sd_boot_validation_sigmask  = self._get_value_fromhex(self.setts.sd_validation_sigmask)
-            self.app_boot_validation_type = self._get_value_fromhex(self.setts.app_validation_type, size=1, format='<b')
             self.app_boot_validation_sigmask = self._get_value_fromhex(self.setts.app_validation_sigmask)
         else:
             self.sd_sz                    = 0x0 & 0xffffffff
             self.boot_validation_crc      = 0x0 & 0xffffffff
-            self.sd_boot_validation_type  = 0x0 & 0xffffffff
             self.sd_boot_validation_sigmask = 0x0 & 0xffffffff
-            self.app_boot_validation_type = 0x0 & 0xffffffff
             self.app_boot_validation_sigmask = 0x0 & 0xffffffff
 
     def fromhexfile(self, f, arch=None):
@@ -415,11 +374,9 @@ Bootloader DFU Settings:
 * Bank0 Bank Code:          0x{11:08X}
 * Softdevice Size:          0x{12:08X} ({12} bytes)
 * Boot Validation CRC:      0x{13:08X}
-* SD Boot Validation Type:  0x{14:08X} ({14})
-* App Boot Validation Type: 0x{15:08X} ({15})
 """.format(self.hex_file, self.arch_str, self.bl_sett_addr, self.crc, self.bl_sett_ver, self.app_ver,
            self.bl_ver, self.bank_layout, self.bank_current, self.app_sz, self.app_crc, self.bank0_bank_code,
-           self.sd_sz, self.boot_validation_crc, self.sd_boot_validation_type, self.app_boot_validation_type)
+           self.sd_sz, self.boot_validation_crc)
         return s
 
     def tohexfile(self, f):

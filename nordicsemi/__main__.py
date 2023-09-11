@@ -268,13 +268,6 @@ def settings():
               help='The bootloader version.',
               type=BASED_INT_OR_NONE,
               required=True)
-@click.option('--bl-settings-version',
-              help='The Bootloader settings version.'
-              'Defined in nrf_dfu_types.h, the following apply to released SDKs:'
-              '\n|SDK12.0.0 - SDK15.2.0|1|'
-              '\n|SDK15.3.0 -          |2|',
-              type=BASED_INT_OR_NONE,
-              required=True)
 @click.option('--start-address',
               help='Custom start address for the settings page. If not specified, '
                    'then the last page of the flash is used.',
@@ -292,14 +285,6 @@ def settings():
                    'The value is precalculated based on configured settings address '
                    '(<DFU_settings_address> - 0x1000).',
               type=BASED_INT_OR_NONE)
-@click.option('--app-boot-validation',
-              help='The method of boot validation for application.',
-              required=False,
-              type=click.Choice(BOOT_VALIDATION_ARGS))
-@click.option('--sd-boot-validation',
-              help='The method of boot validation for SoftDevice.',
-              required=False,
-              type=click.Choice(BOOT_VALIDATION_ARGS))
 @click.option('--softdevice',
               help='The SoftDevice firmware file. Must be given if SD Boot Validation is used.',
               required=False,
@@ -314,12 +299,9 @@ def generate(hex_file,
              application_version,
              application_version_string,
              bootloader_version,
-             bl_settings_version,
              start_address,
              no_backup,
              backup_address,
-             app_boot_validation,
-             sd_boot_validation,
              softdevice,
              key_file):
 
@@ -352,37 +334,23 @@ def generate(hex_file,
     if (start_address is not None) and (backup_address is None):
         click.echo("WARNING: Using default offset in order to calculate bootloader settings backup page")
 
-    if bl_settings_version == 1 and (app_boot_validation or sd_boot_validation):
-        raise click.BadParameter("Bootloader settings version 1 does not support boot validation.", param_hint='bl_settings_version')
-
     # load signing key (if needed) only once
-    if 'VALIDATE_ECDSA_P256_SHA256' in (app_boot_validation, sd_boot_validation):
-        if not os.path.isfile(key_file):
-            raise click.UsageError("Key file must be given when 'VALIDATE_ECDSA_P256_SHA256' boot validation is used")
-        signer = Signing()
-        default_key = signer.load_key(key_file)
-        if default_key:
-            display_sec_warning()
-    else:
-        signer = None
+    if not os.path.isfile(key_file):
+        raise click.UsageError("Key file must be given")
+    signer = Signing()
+    default_key = signer.load_key(key_file)
+    if default_key:
+        display_sec_warning()
 
-    if app_boot_validation and not application:
-        raise click.UsageError("--application hex file must be set when using --app_boot_validation")
 
-    if sd_boot_validation and not softdevice:
-        raise click.UsageError("--softdevice hex file must be set when using --sd_boot_validation")
+    if not application:
+        raise click.UsageError("--application hex file must be set")
 
-    # Default boot validation cases
-    if app_boot_validation is None and application is not None and bl_settings_version == 2:
-        app_boot_validation = DEFAULT_BOOT_VALIDATION
-    if sd_boot_validation is None and softdevice is not None and bl_settings_version == 2:
-        sd_boot_validation = DEFAULT_BOOT_VALIDATION
 
     sett = BLDFUSettings()
     sett.generate(arch=family, app_file=application, app_ver=application_version_internal, bl_ver=bootloader_version,
-                  bl_sett_ver=bl_settings_version, custom_bl_sett_addr=start_address, no_backup=no_backup,
-                  backup_address=backup_address, app_boot_validation_type=app_boot_validation,
-                  sd_boot_validation_type=sd_boot_validation, sd_file=softdevice, signer=signer)
+                  custom_bl_sett_addr=start_address, no_backup=no_backup,
+                  backup_address=backup_address, sd_file=softdevice, signer=signer)
     sett.tohexfile(hex_file)
 
     click.echo("\nGenerated Bootloader DFU settings .hex file and stored it in: {}".format(hex_file))
@@ -569,22 +537,11 @@ def pkg():
 @click.option('--softdevice',
               help='The SoftDevice firmware file.',
               type=click.STRING)
-@click.option('--sd-boot-validation',
-              help='The method of boot validation for Softdevice.',
-              required=False,
-              type=click.Choice(BOOT_VALIDATION_ARGS))
-@click.option('--app-boot-validation',
-              help='The method of boot validation for application.',
-              required=False,
-              type=click.Choice(BOOT_VALIDATION_ARGS))
 @click.option('--key-file',
               help='The private (signing) key in PEM format.',
               required=False,
               type=click.Path(exists=True, resolve_path=True, file_okay=True, dir_okay=False))
-@click.option('--external-app',
-              help='Indicates that the FW upgrade is intended to be passed through '
-                   '(not applied on the receiving device)',
-              type=click.BOOL, is_flag=True, default=False)
+
 def generate(zipfile,
            debug_mode,
            application,
@@ -596,10 +553,7 @@ def generate(zipfile,
            sd_req,
            sd_id,
            softdevice,
-           sd_boot_validation,
-           app_boot_validation,
-           key_file,
-           external_app,):
+           key_file,):
     """
     Generate a zip package for distribution to apps that support Nordic DFU OTA.
     The application, bootloader, and SoftDevice files are converted to .bin if supplied as .hex files.
@@ -650,9 +604,6 @@ def generate(zipfile,
     if hw_version == 'none':
         hw_version = None
 
-    if external_app is None:
-        external_app = False
-
     # Convert multiple value into a single instance
     if len(sd_req) > 1:
         raise click.BadParameter("Please specify SoftDevice requirements as a comma-separated list: --sd-req 0xXXXX,0xYYYY,...", param_hint='sd_req')
@@ -696,7 +647,7 @@ def generate(zipfile,
     if hw_version is None:
         raise click.UsageError("--hw-version required.")
 
-    if sd_req is None and external_app is False:
+    if sd_req is None:
         raise click.UsageError("--sd-req required.")
 
     if application is not None and application_version_internal is None:
@@ -708,15 +659,6 @@ def generate(zipfile,
 
     if application is not None and softdevice is not None and sd_id is None:
         raise click.UsageError("--sd-id required with softdevice and application images.")
-
-    if application is None and external_app is True:
-        raise click.UsageError("--external-app requires an application.")
-
-    if application is not None and softdevice is not None and external_app is True:
-        raise click.UsageError("--external-app is only possible for application only DFU packages.")
-
-    if application is not None and bootloader is not None and external_app is True:
-        raise click.UsageError("--external-app is only possible for application only DFU packages.")
 
     sd_req_list = []
     if sd_req is not None:
@@ -757,10 +699,6 @@ def generate(zipfile,
         if default_key:
             display_sec_warning()
 
-    # Set the external_app to false in --zigbee is set
-    inner_external_app = external_app
-
-
     # Generate a DFU package. If --zigbee is set this is the inner DFU package
     # which will be used as a binary input to the outer DFU package
     package = Package(debug_mode,
@@ -772,10 +710,7 @@ def generate(zipfile,
                       application,
                       bootloader,
                       softdevice,
-                      sd_boot_validation,
-                      app_boot_validation,
-                      signer,
-                      inner_external_app)
+                      signer,)
 
     package.generate_package(zipfile_path)
 
