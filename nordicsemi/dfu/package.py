@@ -50,7 +50,7 @@ import hashlib
 
 # Nordic libraries
 from .nrfhex import nRFHex
-from .init_packet_pb import InitPacketPB, DFUType, CommandTypes, ValidationTypes, HashTypes
+from .init_packet_pb import InitPacketPB, DFUType, CommandTypes, HashTypes
 from .manifest import ManifestGenerator, Manifest
 from .model import HexType, FirmwareKeys
 from .crc16 import calc_crc16
